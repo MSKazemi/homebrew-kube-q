@@ -1,0 +1,140 @@
+name: Bump kube-q
+
+# Keeps Formula/kube-q.rb tracking the latest kube-q on PyPI, without needing a
+# cross-repo token: this workflow polls PyPI itself rather than being pushed to
+# from the main repository.
+#
+# The important part is the gate. A formula can carry a correct-looking url and
+# sha256 and still fail to install — that is exactly how this formula sat broken
+# before (it pinned kube_q 1.0.0, a version that was never published). So the
+# bump is only committed after `brew audit --strict --online` passes AND the
+# formula actually builds and runs.
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to bump to (empty = latest on PyPI)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bump-kube-q
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve target version
+        id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "${INPUT_VERSION}" ]; then
+            target="${INPUT_VERSION}"
+          else
+            target="$(curl -fsSL https://pypi.org/pypi/kube-q/json \
+              | python3 -c 'import sys,json; print(json.load(sys.stdin)["info"]["version"])')"
+          fi
+          current="$(sed -n 's|.*/kube_q-\(.*\)\.tar\.gz".*|\1|p' Formula/kube-q.rb | head -1)"
+          echo "target=${target}"   >> "$GITHUB_OUTPUT"
+          echo "current=${current}" >> "$GITHUB_OUTPUT"
+          if [ "${target}" = "${current}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Formula is already at ${current} — nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Bumping ${current} -> ${target}"
+          fi
+
+      - name: Rewrite url and sha256 from PyPI
+        if: steps.v.outputs.changed == 'true'
+        env:
+          TARGET: ${{ steps.v.outputs.target }}
+        run: |
+          curl -fsSL https://pypi.org/pypi/kube-q/json -o /tmp/kube-q.json
+          python3 - <<'PY'
+          import json, os, re
+
+          target = os.environ["TARGET"]
+          meta = json.load(open("/tmp/kube-q.json"))
+          files = meta["releases"].get(target)
+          if not files:
+              raise SystemExit(f"kube-q {target} is not on PyPI")
+          sdist = next((f for f in files if f["packagetype"] == "sdist"), None)
+          if sdist is None:
+              raise SystemExit(f"kube-q {target} has no sdist; the formula builds from source")
+
+          path = "Formula/kube-q.rb"
+          src = open(path).read()
+          src, n_url = re.subn(r'^(  url ")[^"]+(")', rf'\g<1>{sdist["url"]}\g<2>', src, count=1, flags=re.M)
+          src, n_sha = re.subn(r'^(  sha256 ")[^"]+(")', rf'\g<1>{sdist["digests"]["sha256"]}\g<2>', src, count=1, flags=re.M)
+          if n_url != 1 or n_sha != 1:
+              raise SystemExit(f"expected one url and one sha256 line, replaced {n_url}/{n_sha}")
+          open(path, "w").write(src)
+          print(f"url    -> {sdist['url']}")
+          print(f"sha256 -> {sdist['digests']['sha256']}")
+          PY
+
+      # brew only audits and installs formulae it can see as a tap, so place the
+      # working copy where Homebrew looks.
+      - name: Expose this checkout as a tap
+        if: steps.v.outputs.changed == 'true'
+        run: |
+          tapdir="$(brew --repository)/Library/Taps/mskazemi/homebrew-kube-q"
+          mkdir -p "${tapdir}"
+          cp -R Formula "${tapdir}/"
+          ls -l "${tapdir}/Formula"
+
+      # Best effort: dependency pins drift as upstream releases, but a stale
+      # resource block still installs, so this must not fail the bump.
+      - name: Refresh Python resource blocks
+        if: steps.v.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          HOMEBREW_NO_INSTALL_FROM_API: "1"
+        run: |
+          tapdir="$(brew --repository)/Library/Taps/mskazemi/homebrew-kube-q"
+          if brew update-python-resources mskazemi/kube-q/kube-q; then
+            cp "${tapdir}/Formula/kube-q.rb" Formula/kube-q.rb
+            echo "Resource blocks refreshed."
+          else
+            echo "::warning::brew update-python-resources failed; keeping the existing resource blocks."
+          fi
+
+      - name: Audit
+        if: steps.v.outputs.changed == 'true'
+        run: brew audit --strict --online mskazemi/kube-q/kube-q
+
+      # The real gate: build it and run it.
+      - name: Build and run
+        if: steps.v.outputs.changed == 'true'
+        run: |
+          brew install --build-from-source mskazemi/kube-q/kube-q
+          kq --version
+          kq --help > /dev/null
+          echo "Installed and runnable: $(kq --version)"
+
+      - name: Commit
+        if: steps.v.outputs.changed == 'true'
+        run: |
+          git config user.name  "Mohsen Seyedkazemi Ardebili"
+          git config user.email "mohsen.seyedkazemi@gmail.com"
+          git add Formula/kube-q.rb
+          if git diff --cached --quiet; then
+            echo "No net change to commit."
+            exit 0
+          fi
+          git commit -m "kube-q ${{ steps.v.outputs.target }}
+
+          Audited with brew audit --strict --online and verified with
+          brew install --build-from-source before committing."
+          git push
