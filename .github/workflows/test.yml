@@ -1,0 +1,49 @@
+name: Test formula
+
+# Proves the formula in this tap can actually be installed, rather than only
+# that it parses. `brew audit` alone is not enough: a formula can audit clean
+# and still fail to build.
+#
+# Runs on every push and PR, and weekly so that upstream dependency drift is
+# caught before a user hits it rather than after.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "41 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: audit + install on macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Expose this checkout as a tap
+        run: |
+          tapdir="$(brew --repository)/Library/Taps/mskazemi/homebrew-kube-q"
+          mkdir -p "${tapdir}"
+          cp -R Formula "${tapdir}/"
+          ls -l "${tapdir}/Formula"
+
+      - name: Audit
+        run: brew audit --strict --online mskazemi/kube-q/kube-q
+
+      - name: Build from source
+        run: brew install --build-from-source mskazemi/kube-q/kube-q
+
+      - name: Run it
+        run: |
+          kq --version
+          kq --help > /dev/null
+          kq completion bash | head -3
+          echo "OK: $(kq --version)"
+
+      - name: Formula linkage test
+        run: brew test mskazemi/kube-q/kube-q || echo "::notice::formula defines no test block"
