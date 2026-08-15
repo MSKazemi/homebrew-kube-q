@@ -1,17 +1,17 @@
 class KubeQ < Formula
   include Language::Python::Virtualenv
 
-  desc "Interactive terminal CLI for chatting with your Kubernetes cluster via an AI backend"
+  desc "Interactive terminal CLI for chatting with your Kubernetes cluster"
   homepage "https://github.com/MSKazemi/kubeintellect"
   url "https://files.pythonhosted.org/packages/92/85/5d0af5d4fcff49447325ffd338c2ef5e386d99b6a106b570f8e97bb66d60/kube_q-1.5.0.tar.gz"
   sha256 "738363d6f3c5c1f97c561924ab232e2cfc0ca6cacb5c9bdb18ab756aa1b1cfc1"
   license "AGPL-3.0-or-later"
 
+  depends_on "maturin" => :build
+  depends_on "rust" => :build
   depends_on "certifi" => :no_linkage
   depends_on "libyaml"
-  depends_on "maturin" => :build
   depends_on "python@3.12"
-  depends_on "rust" => :build
 
   pypi_packages exclude_packages: "certifi"
 
@@ -110,6 +110,6 @@ class KubeQ < Formula
   end
 
   test do
-    assert_match "kube-q", shell_output("#{bin}/kq --help 2>&1", 0)
+    assert_match "kube-q", shell_output("#{bin}/kq --help 2>&1")
   end
 end
