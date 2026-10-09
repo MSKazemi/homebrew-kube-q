@@ -3,8 +3,8 @@ class KubeQ < Formula
 
   desc "Interactive CLI to chat with your Kubernetes cluster via an AI backend"
   homepage "https://github.com/MSKazemi/kubeintellect"
-  url "https://files.pythonhosted.org/packages/64/b5/1ec9db2f2eb410a91cdaf9a60d6b5f7ecb18d6d67cc5eec76c3a505170ba/kube_q-1.6.0.tar.gz"
-  sha256 "28a220b112b7f17eaeb3dcc080dc2035dd19aecba28f6925b6e9925fbd7c4325"
+  url "https://files.pythonhosted.org/packages/5c/2b/21017b7f4ea8a7eba16ec8005f2676017f8b6da330a3bada060048a92ea9/kube_q-1.6.1.tar.gz"
+  sha256 "392f190523b2844468b9c5522da283a8f294c237d0154335c34b77138860e587"
   license "AGPL-3.0-or-later"
 
   depends_on "maturin" => :build
