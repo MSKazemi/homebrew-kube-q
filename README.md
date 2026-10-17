@@ -42,3 +42,9 @@ Source of truth for the formula is this repository. Issues and pull requests
 belong on the [main repo](https://github.com/MSKazemi/kubeintellect/issues).
 
 Licensed AGPL-3.0-or-later, matching the software it installs.
+
+<!-- legal-notice: start -->
+### Legal notice and responsible use
+
+The materials in this repository are made available without warranties to the extent permitted by applicable law. **Please read the [Disclaimer and Responsible-Use Notice](DISCLAIMER.md)** before relying on or deploying them. This notice does not change any existing software license or limit rights that cannot legally be waived.
+<!-- legal-notice: end -->
